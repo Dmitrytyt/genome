@@ -1,0 +1,41 @@
+version: '3.2'
+
+services:
+  genome_php:
+    build:
+      context: ./.docker
+    container_name: genome_php
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - '8008:80'
+    volumes:
+      - ./.docker/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+      - ./.docker/php/conf.d/error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
+      - ./.docker/php/conf.d/custom_settings.ini:/usr/local/etc/php/conf.d/custom_settings.ini
+      - ./:/var/www/html
+    user: "ubuntu"
+    networks:
+      - shared_network
+    depends_on:
+      - genome_mysql
+
+  genome_mysql:
+    build: ./.docker/mysql  # или просто image: mariadb:10.8.8-jammy
+    container_name: genome_mysql
+    volumes:
+      - ".docker/data/db:/var/lib/mysql"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-genome}
+      MARIADB_DATABASE:     ${MYSQL_DATABASE:-genome}
+      MARIADB_USER:         ${MYSQL_USER:-genome}
+      MARIADB_PASSWORD:     ${MYSQL_PASSWORD:-genome}
+    ports:
+      - "3378:3306"
+    networks:
+      - shared_network
+
+networks:
+  shared_network:
+    external:
+      name: my-shared-network
