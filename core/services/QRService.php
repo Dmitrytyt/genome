@@ -26,7 +26,13 @@ class QRService
         $qrCode->setSize(self::QR_CODE_SIZE);
         $qrCode->setMargin(self::QR_CODE_MARGIN);
 
-        $filePath = Yii::getAlias('@webroot/'.self::QR_CODE_DIR.'/') . $token . self::QR_CODE_IMAGE_EXT;
+        $directory = Yii::getAlias('@webroot/'.self::QR_CODE_DIR);
+
+        if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
+            throw new \RuntimeException("Failed to create directory: $directory");
+        }
+
+        $filePath = $directory .'/'. $token . self::QR_CODE_IMAGE_EXT;
         $writer = new PngWriter();
 
         try {
