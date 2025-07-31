@@ -42,9 +42,6 @@ web/css/site.css.map
 /web/robots.txt
 web/qrcodes/*
 
-# ignore core .htaccess
-.htaccess
-
 # ignore common runtime
 /runtime/cache
 
