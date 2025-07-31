@@ -37,5 +37,4 @@ services:
 
 networks:
   shared_network:
-    external:
-      name: my-shared-network
+    name: my_shared_network
