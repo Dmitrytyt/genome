@@ -32,11 +32,6 @@ tests/_support/_generated
 #vagrant folder
 /.vagrant
 
-# yii console commands
-/yii
-/yii_test
-/yii_test.bat
-
 # ignore generated files
 web/css/site.css.map
 /web/robots.txt
