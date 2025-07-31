@@ -2,37 +2,52 @@
 
 namespace app\controllers;
 
+use app\core\entities\Link;
+use app\core\forms\LinkForm;
+use app\core\forms\LinkLogForm;
+use app\core\services\LinkLogService;
+use app\core\services\LinkService;
+use app\core\services\QRService;
+use DomainException;
 use Yii;
-use yii\filters\AccessControl;
-use yii\web\Controller;
-use yii\web\Response;
 use yii\filters\VerbFilter;
-use app\models\LoginForm;
-use app\models\ContactForm;
+use yii\web\Controller;
+use yii\web\NotFoundHttpException;
+use yii\web\Response;
+use yii\widgets\ActiveForm;
+use yii\web\ErrorAction;
 
 class SiteController extends Controller
 {
+    private LinkService $linkService;
+    private LinkLogService $linkLogService;
+    private QRService $qrService;
+
+    public function __construct(
+        $id,
+        $module,
+        LinkService $serviceLink,
+        LinkLogService $serviceLinkLog,
+        QRService $serviceQR,
+        array $config = []
+    ) {
+        parent::__construct($id, $module, $config);
+
+        $this->linkService = $serviceLink;
+        $this->linkLogService = $serviceLinkLog;
+        $this->qrService = $serviceQR;
+    }
+
     /**
      * {@inheritdoc}
      */
-    public function behaviors()
+    public function behaviors(): array
     {
         return [
-            'access' => [
-                'class' => AccessControl::class,
-                'only' => ['logout'],
-                'rules' => [
-                    [
-                        'actions' => ['logout'],
-                        'allow' => true,
-                        'roles' => ['@'],
-                    ],
-                ],
-            ],
             'verbs' => [
                 'class' => VerbFilter::class,
                 'actions' => [
-                    'logout' => ['post'],
+                    'index' => ['get', 'post'],
                 ],
             ],
         ];
@@ -41,88 +56,92 @@ class SiteController extends Controller
     /**
      * {@inheritdoc}
      */
-    public function actions()
+    public function actions(): array
     {
         return [
             'error' => [
-                'class' => 'yii\web\ErrorAction',
-            ],
-            'captcha' => [
-                'class' => 'yii\captcha\CaptchaAction',
-                'fixedVerifyCode' => YII_ENV_TEST ? 'testme' : null,
+                'class' => ErrorAction::class,
             ],
         ];
     }
 
     /**
-     * Displays homepage.
-     *
-     * @return string
+     * @throws NotFoundHttpException
      */
     public function actionIndex()
     {
-        return $this->render('index');
-    }
+        $url = Yii::$app->request->url;
 
-    /**
-     * Login action.
-     *
-     * @return Response|string
-     */
-    public function actionLogin()
-    {
-        if (!Yii::$app->user->isGuest) {
-            return $this->goHome();
+        if (mb_strlen($url) === Link::TOKEN_LENGTH + 1) {
+            $this->actionView($url);
         }
 
-        $model = new LoginForm();
-        if ($model->load(Yii::$app->request->post()) && $model->login()) {
-            return $this->goBack();
+        $linkForm = new LinkForm();
+
+        if (Yii::$app->request->isAjax && $linkForm->load(Yii::$app->request->post())) {
+            if (!$linkForm->validate()) {
+                Yii::$app->response->format = Response::FORMAT_JSON;
+                return ActiveForm::validate($linkForm);
+            }
+
+            try {
+                $link = $this->linkService->add($linkForm);
+
+                return $this->asJson([
+                    'id' => $link->id,
+                    'shortUrl' => $link->short_url,
+                    'qrCode' => $this->qrService->generateQRCode($link->short_url, $link->token),
+                ]);
+            } catch (DomainException $e) {
+                $linkForm->addError($linkForm->getInputId('link'), $e->getMessage());
+                return $this->asJson($linkForm->getErrors());
+            }
         }
 
-        $model->password = '';
-        return $this->render('login', [
-            'model' => $model,
+        return $this->render('index', [
+            'model' => $linkForm,
         ]);
     }
 
     /**
-     * Logout action.
-     *
-     * @return Response
+     * @throws NotFoundHttpException
      */
-    public function actionLogout()
+    public function actionView(string $tokenPart = null): Response
     {
-        Yii::$app->user->logout();
-
-        return $this->goHome();
-    }
-
-    /**
-     * Displays contact page.
-     *
-     * @return Response|string
-     */
-    public function actionContact()
-    {
-        $model = new ContactForm();
-        if ($model->load(Yii::$app->request->post()) && $model->contact(Yii::$app->params['adminEmail'])) {
-            Yii::$app->session->setFlash('contactFormSubmitted');
-
-            return $this->refresh();
+        if ($tokenPart === null) {
+            throw new NotFoundHttpException('Запрашиваемая страница не существует.');
         }
-        return $this->render('contact', [
-            'model' => $model,
-        ]);
+
+        $token = mb_substr($tokenPart, 1, Link::TOKEN_LENGTH);
+        $linkModel = $this->findModel($token);
+
+        try {
+            $link = $this->linkService->addClick($linkModel);
+        } catch (DomainException $e) {
+            throw new NotFoundHttpException('Ошибка отображения ссылки.');
+        }
+
+        $linkLogForm = new LinkLogForm();
+        $linkLogForm->load(['linkId' => $link->id, 'ipAddress' => Yii::$app->request->userIP]);
+
+        try {
+            $this->linkLogService->add($linkLogForm);
+        } catch (DomainException $e) {
+            throw new NotFoundHttpException('Ошибка отображения ссылки.');
+        }
+
+        return $this->redirect($link->original_url);
     }
 
     /**
-     * Displays about page.
-     *
-     * @return string
+     * @throws NotFoundHttpException
      */
-    public function actionAbout()
+    protected function findModel($token): Link
     {
-        return $this->render('about');
+        if (($model = Link::findOne(['token' => $token])) !== null) {
+            return $model;
+        }
+
+        throw new NotFoundHttpException('Запрашиваемая страница не существует.');
     }
 }

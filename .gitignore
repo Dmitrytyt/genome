@@ -40,6 +40,7 @@ tests/_support/_generated
 # ignore generated files
 web/css/site.css.map
 /web/robots.txt
+web/qrcodes/*
 
 # ignore core .htaccess
 .htaccess
