@@ -25,12 +25,16 @@ docker exec -it genome_php bash
 composer install
 ```
 
-Выберите: `[0] Development`
-
 5. Теперь необходимо произвести миграции:
 
 ```
 php yii migrate
+```
+
+6. Запустите приложение:
+
+```
+http://localhost:8008/
 ```
 
 ## Альтернативная установка (пример: OSPanel)
